@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - feature/escpos-printer
 
 jobs:
   build:
@@ -43,6 +44,7 @@ jobs:
         run: |
           rm -f package-lock.json
           npm install --include=dev --registry=https://registry.npmjs.org/
+          npm install -D typescript
           npx vite --version
           npx tsc --version
 
