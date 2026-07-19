@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - feature/escpos-printer
+      - Profile
 
 jobs:
   build:
