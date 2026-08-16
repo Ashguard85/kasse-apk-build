@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - feature/escpos-printer
 
 jobs:
   build:
@@ -43,6 +44,7 @@ jobs:
         run: |
           rm -f package-lock.json
           npm install --include=dev --registry=https://registry.npmjs.org/
+          npm install -D typescript
           npx vite --version
           npx tsc --version
 
@@ -54,16 +56,41 @@ jobs:
         working-directory: kasse/frontend
         run: npx cap sync android
 
+      - name: Verify signing secrets
+        shell: bash
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$KS_B64" || (echo "ANDROID_KEYSTORE_BASE64 secret is missing" && exit 1)
+          test -n "$KS_PASSWORD" || (echo "ANDROID_KEYSTORE_PASSWORD secret is missing" && exit 1)
+          test -n "$KS_ALIAS" || (echo "ANDROID_KEY_ALIAS secret is missing" && exit 1)
+          test -n "$KEY_PASSWORD" || (echo "ANDROID_KEY_PASSWORD secret is missing" && exit 1)
+
+      - name: Restore release keystore
+        shell: bash
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$KS_B64" | base64 --decode > kasse/frontend/android/app/kinderkasse-release.jks
+
       - name: Make Gradle executable
         working-directory: kasse/frontend/android
         run: chmod +x ./gradlew
 
-      - name: Build debug APK
+      - name: Build signed release APK
         working-directory: kasse/frontend/android
-        run: ./gradlew assembleDebug
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ github.workspace }}/kasse/frontend/android/app/kinderkasse-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: kasse-debug-apk
-          path: kasse/frontend/android/app/build/outputs/apk/debug/app-debug.apk
+          name: kasse-release-apk
+          path: kasse/frontend/android/app/build/outputs/apk/release/app-release.apk
